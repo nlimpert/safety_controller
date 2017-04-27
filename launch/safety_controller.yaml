@@ -1,0 +1,97 @@
+#footprint: [ [-0.25, -0.25], [-0.25, 0.25], [0.25, 0.25], [0.25, -0.25]]
+footprint: [
+             [0.3,-0.25],
+             [0.3,0.25],
+             [-0.27,0.25],
+             [-0.27,-0.25]
+           ]
+
+#robot_radius: 0.15
+
+theta_range: 0.25
+obs_theta_range: 0.25
+
+num_th_samples: 4
+
+planner:
+  transform_tolerance: 0.2
+  costmap_visualization_rate: 0.0
+  world_model: costmap
+  sim_time: 1.5
+  sim_granularity: 0.025
+  vx_samples: 3
+  vtheta_samples: 15
+  max_vel_x: 0.45
+  min_vel_x: 0.05
+  max_vel_th: 1.0
+  min_vel_th: -1.0
+  min_in_place_vel_th: 0.25
+  xy_goal_tolerance: 0.08
+  yaw_goal_tolerance: 0.02
+  acc_lim_th: 3.2
+  acc_lim_x: 2.5
+  acc_lim_y: 2.5
+  
+costmap:
+  publish_voxel_map: false
+  global_frame: /map
+  robot_base_frame: base_link
+  update_frequency: 20.0
+  publish_frequency: 5.0
+  static_map: false
+  rolling_window: true
+  width: 5.0
+  height: 5.0
+  resolution: 0.1
+  origin_x: -5.0
+  origin_y: -5.0
+  inf_is_valid: true
+  inflation_radius: 0.5
+
+  obstacle_range: 5.0
+  max_obstacle_height: 2.0
+  raytrace_range: 1.0
+  transform_tolerance: 0.5
+  map_type: costmap
+
+  obstacle_layer:
+    enabled: true
+    obstacle_range: 5.0
+    raytrace_range: 10.0
+    inflation_radius: 0.1
+    track_unknown_space: false
+    combination_method: 1
+    inf_is_valid: true
+   
+    observation_sources: laser_scan_sensor
+    laser_scan_sensor: {data_type: LaserScan, topic: fawkes_scans/Laser_tim55x_360_filtered, marking: true, clearing: true, observation_persistence: 0.5}
+#    laser_map: {data_type: LaserScan, topic: fawkes_scans/Map_Laser_360, marking: true, clearing: true, observation_persistence: 0.0}
+
+#  observation_sources: laser_scan_sensor
+#  laser_scan_sensor: {data_type: LaserScan, topic: fawkes_scans/Laser_tim55x_360_filtered, expected_update_rate: 0.4, observation_persistence: 0.0, marking: true, clearing: true, max_obstacle_height: 0.4, min_obstacle_height: 0.08}
+
+
+  static_layer:
+    enabled:              true
+    map_topic:            "/map"
+
+  inflation_layer:
+    enabled:              true
+    cost_scaling_factor:  10.0  # exponential rate at which the obstacle cost drops off (default: 10)
+    inflation_radius:     0.5  # max. distance from an obstacle at which costs are incurred for planning paths.
+
+#  social_layer:
+#     amplitude: 254.0
+#     covariance: 0.85
+#     cutoff: 156.86
+#     enabled: true
+#     factor: 9.6
+#     keep_time: 0.7
+
+  plugins:
+#    - {name: static_layer,            type: "costmap_2d::StaticLayer"}
+    - {name: obstacle_layer,          type: "costmap_2d::VoxelLayer"}
+    - {name: inflation_layer,         type: "costmap_2d::InflationLayer"}
+#    - {name: social_layer,            type: "social_navigation_layers::ProxemicLayer"}
+
+
