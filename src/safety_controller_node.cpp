@@ -81,6 +81,7 @@ namespace safety_controller {
         cmd_vel_ = *vel;
         last_msg_stamp_ = ros::Time::now();
         active_ = true;
+        costmap_ros_.start();
     }
 
     void SafetyController::controlLoop(){
@@ -88,6 +89,7 @@ namespace safety_controller {
         while(ros::ok()){
 
             if (!active_) {
+                costmap_ros_.stop();
                 r.sleep();
                 continue;
             }
