@@ -38,6 +38,7 @@
 #define SAFETY_CONTROLLER_SAFETY_CONTROLLER_H_
 #include <ros/ros.h>
 #include <geometry_msgs/Twist.h>
+#include <sensor_msgs/LaserScan.h>
 #include <geometry_msgs/Point.h>
 #include <costmap_2d/costmap_2d_ros.h>
 #include <base_local_planner/trajectory_planner_ros.h>
@@ -47,6 +48,10 @@
 #include <Eigen/Core>
 #include <math.h>
 #include <angles/angles.h>
+
+#include <dynamic_reconfigure/DoubleParameter.h>
+#include <dynamic_reconfigure/Reconfigure.h>
+#include <dynamic_reconfigure/Config.h>
 
 #ifdef VISUALIZE
 #include <visualization_msgs/Marker.h>
@@ -60,28 +65,43 @@ namespace safety_controller {
         ~SafetyController();
     private:
         void velCB(const geometry_msgs::TwistConstPtr& vel);
+        void laserCB(const sensor_msgs::LaserScanConstPtr& laser_msg);
 
         std::vector<geometry_msgs::Point> makeFootprintFromRadius(double radius);
         bool validate(double x, double y, double th, bool update_map);
 
         void controlLoop();
+        void set_local_planner_max_lin_vel(double new_lin_vel);
 
         tf::TransformListener tf_;
         costmap_2d::Costmap2DROS costmap_ros_;
         double controller_frequency_;
         base_local_planner::TrajectoryPlannerROS planner_;
-        boost::mutex mutex_;
+        boost::mutex vel_mutex_;
+        boost::mutex laser_mutex_;
         geometry_msgs::Twist cmd_vel_;
+        sensor_msgs::LaserScan laser_msg_;
         boost::thread* planning_thread_;
         double theta_range_, obs_theta_range_;
         int num_th_samples_, num_x_samples_;
         ros::Publisher pub_;
         ros::Subscriber sub_;
+        ros::Subscriber laser_sub_;
         double min_radius_, max_radius_, min_speed_, max_speed_;
         bool active_;
         ros::Time last_msg_stamp_;
         ros::Duration msg_timeout_;
         double msg_timeout_sec_;
+
+        tf::Stamped < tf::Pose > robot_pose;
+        unsigned int robot_pose_x, robot_pose_y;
+        unsigned char robot_pose_cell_cost;
+
+        double high_vel_, medium_vel_, low_vel_;
+        int high_vel_cost_thresh_, medium_vel_cost_thresh_, low_vel_cost_thresh_;
+
+        double last_lin_vel;
+        double new_vel;
 
         double low_vel_thresh_;
         nav_msgs::Odometry odom_;

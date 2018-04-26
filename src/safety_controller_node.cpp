@@ -41,7 +41,6 @@
 namespace safety_controller {
     SafetyController::SafetyController() : costmap_ros_("costmap", tf_), planning_thread_(NULL){
         ros::NodeHandle private_nh("~");
-        std::cout << "INIT" << std::endl;
         private_nh.param("controller_frequency", controller_frequency_, 10.0);
         private_nh.param("num_th_samples", num_th_samples_, 20);
         private_nh.param("num_x_samples", num_x_samples_, 10);
@@ -50,16 +49,25 @@ namespace safety_controller {
         private_nh.param("min_radius", min_radius_, 0.27);
         private_nh.param("max_radius", max_radius_, 1.5);
         private_nh.param("min_speed", min_speed_, 0.1);
-        private_nh.param("max_speed", max_speed_, 0.8);
+        private_nh.param("high_vel", high_vel_, 1.0);
+        private_nh.param("medium_vel", medium_vel_, 0.6);
+        private_nh.param("low_vel", low_vel_, 0.3);
+
+        private_nh.param("high_vel_cost_thresh", high_vel_cost_thresh_, 20);
+        private_nh.param("medium_vel_cost_thresh", medium_vel_cost_thresh_, 30);
+        private_nh.param("low_vel_cost_thresh", low_vel_cost_thresh_, 70);
+
         private_nh.param("msg_timeout", msg_timeout_sec_, 0.2);
         planner_.initialize("planner", &tf_, &costmap_ros_);
 
         ros::NodeHandle n;
         pub_ = n.advertise<geometry_msgs::Twist>("cmd_vel", 1);
         sub_ = n.subscribe("plan_cmd_vel", 10, &SafetyController::velCB, this);
+        laser_sub_ = n.subscribe("scan", 10, &SafetyController::laserCB, this);
         cmd_vel_.linear.x = 0.0;
         cmd_vel_.linear.y = 0.0;
         cmd_vel_.angular.z = 0.0;
+        last_lin_vel = 0.0;
 
 #ifdef VISUALIZE
         marker_pub = n.advertise<visualization_msgs::MarkerArray>("visualization_markers_safety_controller", 1);
@@ -67,6 +75,7 @@ namespace safety_controller {
 
         active_ = false;
         msg_timeout_ = ros::Duration(msg_timeout_sec_);
+        last_msg_stamp_ = ros::Time::now();
 
         planning_thread_ = new boost::thread(boost::bind(&SafetyController::controlLoop, this));
     }
@@ -77,11 +86,16 @@ namespace safety_controller {
     }
 
     void SafetyController::velCB(const geometry_msgs::TwistConstPtr& vel){
-        boost::mutex::scoped_lock lock(mutex_);
+        boost::mutex::scoped_lock lock(vel_mutex_);
         cmd_vel_ = *vel;
         last_msg_stamp_ = ros::Time::now();
         active_ = true;
         costmap_ros_.start();
+    }
+
+    void SafetyController::laserCB(const sensor_msgs::LaserScanConstPtr& laser_msg){
+        boost::mutex::scoped_lock lock(laser_mutex_);
+        laser_msg_ = *laser_msg;
     }
 
     void SafetyController::controlLoop(){
@@ -93,6 +107,39 @@ namespace safety_controller {
                 r.sleep();
                 continue;
             }
+
+            // update pose
+            if (!costmap_ros_.getRobotPose(robot_pose))
+            {
+              ROS_WARN_THROTTLE(1.0, "Could not get robot pose, cancelling reconfiguration");
+            }
+
+            costmap_ros_.getCostmap()->worldToMap(
+                  robot_pose.getOrigin().x(),
+                  robot_pose.getOrigin().y(),
+                  robot_pose_x,
+                  robot_pose_y);
+
+            float max_allowed_vel = medium_vel_;
+            robot_pose_cell_cost = costmap_ros_.getCostmap()->getCost(robot_pose_x, robot_pose_y);
+
+            if (robot_pose_cell_cost <= medium_vel_cost_thresh_) {
+              max_allowed_vel = high_vel_;
+            } else if (robot_pose_cell_cost > medium_vel_cost_thresh_ &&
+                       robot_pose_cell_cost < low_vel_cost_thresh_) {
+              max_allowed_vel = medium_vel_;
+            }
+
+
+            for (int i = 0; i < laser_msg_.ranges.size(); i++) {
+              float r = laser_msg_.ranges[i];
+              if (r <= 1.0) {
+                max_allowed_vel = low_vel_;
+                break;
+              }
+            }
+
+            set_local_planner_max_lin_vel(max_allowed_vel);
 
             if (ros::Time::now() - last_msg_stamp_ > msg_timeout_) {
                 // stop and disable because of too old messages
@@ -110,7 +157,7 @@ namespace safety_controller {
 
             //we'll copy over velocity data for planning
             {
-                boost::mutex::scoped_lock lock(mutex_);
+                boost::mutex::scoped_lock lock(vel_mutex_);
                 desired_vel[0] = cmd_vel_.linear.x;
                 desired_vel[1] = cmd_vel_.linear.y;
                 desired_vel[2] = cmd_vel_.angular.z;
@@ -197,6 +244,36 @@ namespace safety_controller {
 #endif
 
         return legal_traj;
+    }
+
+    void SafetyController::set_local_planner_max_lin_vel(double new_lin_vel) {
+      if (new_lin_vel == last_lin_vel) {
+        return;
+      }
+      dynamic_reconfigure::ReconfigureRequest dynreconf_srv_req;
+      dynamic_reconfigure::ReconfigureResponse dynreconf_srv_resp;
+      dynamic_reconfigure::DoubleParameter dynreconf_max_vel_x_param;
+      dynamic_reconfigure::DoubleParameter dynreconf_max_vel_y_param;
+      dynamic_reconfigure::BoolParameter dynreconf_bool_param;
+      dynamic_reconfigure::Config dynreconf_conf;
+
+      dynreconf_max_vel_x_param.name = "max_vel_x";
+      dynreconf_max_vel_x_param.value = new_lin_vel;
+      dynreconf_max_vel_y_param.name = "max_vel_y";
+      dynreconf_max_vel_y_param.value = new_lin_vel;
+      dynreconf_conf.doubles.push_back(dynreconf_max_vel_x_param);
+      dynreconf_conf.doubles.push_back(dynreconf_max_vel_y_param);
+      dynreconf_srv_req.config = dynreconf_conf;
+
+      if (! ros::service::call("/move_base/TebLocalPlannerROS/set_parameters", dynreconf_srv_req, dynreconf_srv_resp)) {
+          ROS_ERROR("Failed to send dynreconf");
+          dynreconf_conf.doubles.clear();
+      } else {
+          ROS_INFO("Sent dynreconf to TebLocalPlannerROS, new vel: %f", new_lin_vel);
+          dynreconf_conf.doubles.clear();
+          last_lin_vel = new_lin_vel;
+
+      }
     }
 };
 
