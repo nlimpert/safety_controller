@@ -6,9 +6,11 @@ project(safety_controller)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
   roscpp
+  rospy
   costmap_2d
   angles
   base_local_planner
+  dynamic_reconfigure
 )
 
 ## System dependencies are found with CMake's conventions
@@ -92,6 +94,8 @@ find_package(catkin REQUIRED COMPONENTS
 #   cfg/DynReconf2.cfg
 # )
 
+generate_dynamic_reconfigure_options(cfg/params.cfg)
+
 ###################################
 ## catkin specific configuration ##
 ###################################
@@ -134,6 +138,8 @@ include_directories(
 
 ## Declare a C++ executable
 add_executable(safety_controller_node src/safety_controller_node.cpp)
+
+add_dependencies(safety_controller_node ${PROJECT_NAME}_gencfg)
 
 ## Add cmake target dependencies of the executable
 ## same as for the library above

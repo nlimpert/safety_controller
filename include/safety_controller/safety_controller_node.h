@@ -48,6 +48,9 @@
 #include <Eigen/Core>
 #include <math.h>
 #include <angles/angles.h>
+#include <safety_controller/paramsConfig.h>
+#include <dynamic_reconfigure/server.h>
+
 
 #include <dynamic_reconfigure/DoubleParameter.h>
 #include <dynamic_reconfigure/Reconfigure.h>
@@ -66,6 +69,10 @@ namespace safety_controller {
     private:
         void velCB(const geometry_msgs::TwistConstPtr& vel);
         void laserCB(const sensor_msgs::LaserScanConstPtr& laser_msg);
+
+        dynamic_reconfigure::Server<safety_controller::paramsConfig> *             dynamic_reconfigure_server;
+        dynamic_reconfigure::Server<safety_controller::paramsConfig>::CallbackType dynamic_reconfigure_callback;
+        void reconfigCB(safety_controller::paramsConfig &config, uint32_t level);
 
         std::vector<geometry_msgs::Point> makeFootprintFromRadius(double radius);
         bool validate(double x, double y, double th, bool update_map);
@@ -97,7 +104,7 @@ namespace safety_controller {
         unsigned int robot_pose_x, robot_pose_y;
         unsigned char robot_pose_cell_cost;
 
-        double high_vel_, medium_vel_, low_vel_;
+        double min_vel_, max_vel_, medium_vel_, low_vel_, max_vel_theta_;
         int high_vel_cost_thresh_, medium_vel_cost_thresh_, low_vel_cost_thresh_;
 
         double last_lin_vel;

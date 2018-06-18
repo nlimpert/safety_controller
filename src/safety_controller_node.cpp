@@ -49,9 +49,11 @@ namespace safety_controller {
         private_nh.param("min_radius", min_radius_, 0.27);
         private_nh.param("max_radius", max_radius_, 1.5);
         private_nh.param("min_speed", min_speed_, 0.1);
-        private_nh.param("high_vel", high_vel_, 1.0);
+        private_nh.param("max_vel", max_vel_, 1.0);
+        private_nh.param("max_vel_theta", max_vel_theta_, 1.0);
         private_nh.param("medium_vel", medium_vel_, 0.6);
         private_nh.param("low_vel", low_vel_, 0.3);
+        private_nh.param("min_vel", min_vel_, 0.1);
 
         private_nh.param("high_vel_cost_thresh", high_vel_cost_thresh_, 20);
         private_nh.param("medium_vel_cost_thresh", medium_vel_cost_thresh_, 30);
@@ -78,11 +80,27 @@ namespace safety_controller {
         last_msg_stamp_ = ros::Time::now();
 
         planning_thread_ = new boost::thread(boost::bind(&SafetyController::controlLoop, this));
+
+        dynamic_reconfigure_callback = boost::bind(&SafetyController::reconfigCB, this, _1, _2);
+        dynamic_reconfigure_server = new dynamic_reconfigure::Server<safety_controller::paramsConfig>(private_nh);
+        dynamic_reconfigure_server->setCallback(dynamic_reconfigure_callback);
     }
 
     SafetyController::~SafetyController(){
         planning_thread_->join();
         delete planning_thread_;
+    }
+
+    void SafetyController::reconfigCB(safety_controller::paramsConfig &config, uint32_t level)
+    {
+      ROS_INFO("Reconfigure request : %f %f",
+               config.max_vel_trans, config.max_vel_theta);
+
+      max_vel_ = config.max_vel_trans;
+      max_vel_theta_  = config.max_vel_theta;
+
+      medium_vel_ = max_vel_ * 0.6;
+      low_vel_ = max_vel_ * 0.3;
     }
 
     void SafetyController::velCB(const geometry_msgs::TwistConstPtr& vel){
@@ -124,7 +142,7 @@ namespace safety_controller {
             robot_pose_cell_cost = costmap_ros_.getCostmap()->getCost(robot_pose_x, robot_pose_y);
 
             if (robot_pose_cell_cost <= medium_vel_cost_thresh_) {
-              max_allowed_vel = high_vel_;
+              max_allowed_vel = max_vel_;
             } else if (robot_pose_cell_cost > medium_vel_cost_thresh_ &&
                        robot_pose_cell_cost < low_vel_cost_thresh_) {
               max_allowed_vel = medium_vel_;
