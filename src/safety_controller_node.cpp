@@ -100,7 +100,7 @@ namespace safety_controller {
       max_vel_theta_  = config.max_vel_theta;
 
       medium_vel_ = max_vel_ * 0.6;
-      low_vel_ = max_vel_ * 0.4;
+      low_vel_ = max_vel_ * 0.3;
     }
 
     void SafetyController::velCB(const geometry_msgs::TwistConstPtr& vel){
