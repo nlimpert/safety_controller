@@ -32,22 +32,15 @@
  *  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  *  POSSIBILITY OF SUCH DAMAGE.
  *
- * Author: Eitan Marder-Eppstein
+ * Author: Nicolas Limpert
  *********************************************************************/
 #ifndef SAFETY_CONTROLLER_SAFETY_CONTROLLER_H_
 #define SAFETY_CONTROLLER_SAFETY_CONTROLLER_H_
-#include <angles/angles.h>
-#include <base_local_planner/trajectory_planner_ros.h>
-#include <costmap_2d/costmap_2d_ros.h>
 #include <dynamic_reconfigure/server.h>
-#include <geometry_msgs/Point.h>
-#include <geometry_msgs/Twist.h>
 #include <math.h>
-#include <nav_msgs/Odometry.h>
 #include <ros/ros.h>
 #include <safety_controller/paramsConfig.h>
 #include <sensor_msgs/LaserScan.h>
-#include <Eigen/Core>
 #include <boost/shared_ptr.hpp>
 #include <boost/thread.hpp>
 
@@ -67,7 +60,6 @@ class SafetyController {
   ~SafetyController();
 
  private:
-  void velCB(const geometry_msgs::TwistConstPtr& vel);
   void laserCB(const sensor_msgs::LaserScanConstPtr& laser_msg);
 
   dynamic_reconfigure::Server<safety_controller::paramsConfig>*
@@ -76,47 +68,19 @@ class SafetyController {
       dynamic_reconfigure_callback;
   void reconfigCB(safety_controller::paramsConfig& config, uint32_t level);
 
-  std::vector<geometry_msgs::Point> makeFootprintFromRadius(double radius);
-  bool validate(double x, double y, double th, bool update_map);
-
   void controlLoop();
   void set_local_planner_max_lin_vel(double new_lin_vel);
 
-  tf::TransformListener tf_;
-  costmap_2d::Costmap2DROS costmap_ros_;
   double controller_frequency_;
-  base_local_planner::TrajectoryPlannerROS planner_;
-  boost::mutex vel_mutex_;
   boost::mutex laser_mutex_;
-  geometry_msgs::Twist cmd_vel_;
   sensor_msgs::LaserScan laser_msg_;
-  boost::thread* planning_thread_;
-  double theta_range_, obs_theta_range_;
-  int num_th_samples_, num_x_samples_;
-  ros::Publisher pub_;
-  ros::Subscriber sub_;
+
+  boost::thread* control_thread_;
   ros::Subscriber laser_sub_;
   double min_radius_, max_radius_, min_speed_, max_speed_;
-  bool active_;
-  ros::Time last_msg_stamp_;
-  ros::Duration msg_timeout_;
-  double msg_timeout_sec_;
 
-  tf::Stamped<tf::Pose> robot_pose;
-  unsigned int robot_pose_x, robot_pose_y;
-  unsigned char robot_pose_cell_cost;
-
-  double min_vel_, max_vel_, medium_vel_, low_vel_, max_vel_theta_;
-  int high_vel_cost_thresh_, medium_vel_cost_thresh_, low_vel_cost_thresh_;
-
-  double last_lin_vel;
-  double new_vel;
-
-  double low_vel_thresh_;
-  nav_msgs::Odometry odom_;
-#ifdef VISUALIZE
-  ros::Publisher marker_pub;
-#endif
+  double min_vel_, max_vel_, med_vel_, low_vel_, max_vel_theta_;
+  double med_dist_, low_dist_;
 };
 };  // namespace safety_controller
 #endif
