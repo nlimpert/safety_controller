@@ -50,6 +50,7 @@ SafetyController::SafetyController() : control_thread_(NULL) {
   ros::NodeHandle n;
   laser_sub_ = n.subscribe("scan", 10, &SafetyController::laserCB, this);
 
+  last_lin_vel = 0.0;
   control_thread_ =
       new boost::thread(boost::bind(&SafetyController::controlLoop, this));
 
@@ -105,6 +106,10 @@ void SafetyController::controlLoop() {
 }
 
 void SafetyController::set_local_planner_max_lin_vel(double new_lin_vel) {
+  if (new_lin_vel == last_lin_vel) {
+    return;
+  }
+
   dynamic_reconfigure::ReconfigureRequest dynreconf_srv_req;
   dynamic_reconfigure::ReconfigureResponse dynreconf_srv_resp;
   dynamic_reconfigure::DoubleParameter dynreconf_max_vel_x_param;
@@ -127,6 +132,7 @@ void SafetyController::set_local_planner_max_lin_vel(double new_lin_vel) {
   } else {
     ROS_INFO("Sent dynreconf to TebLocalPlannerROS, new vel: %f", new_lin_vel);
     dynreconf_conf.doubles.clear();
+    last_lin_vel = new_lin_vel;
   }
 }
 };  // namespace safety_controller
