@@ -78,6 +78,7 @@ class SafetyController {
   boost::thread* control_thread_;
   ros::Subscriber laser_sub_;
   double min_radius_, max_radius_, min_speed_, max_speed_;
+  double last_lin_vel;
 
   double min_vel_, max_vel_, med_vel_, low_vel_, max_vel_theta_;
   double med_dist_, low_dist_;
