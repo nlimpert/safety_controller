@@ -102,6 +102,7 @@ void SafetyController::controlLoop() {
     }
 
     set_local_planner_max_lin_vel(max_allowed_vel);
+    r.sleep();
   }
 }
 
