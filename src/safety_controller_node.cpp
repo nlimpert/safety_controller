@@ -46,11 +46,13 @@ SafetyController::SafetyController() : control_thread_(NULL) {
   private_nh.param("medium_vel", med_vel_, 0.6);
   private_nh.param("low_vel", low_vel_, 0.3);
   private_nh.param("min_vel", min_vel_, 0.1);
+  private_nh.param("prioritize_right_side", prioritize_right_side_, false);
 
   ros::NodeHandle n;
   laser_sub_ = n.subscribe("scan", 10, &SafetyController::laserCB, this);
 
   last_lin_vel = 0.0;
+  num_beams_half_ = 0;
   control_thread_ =
       new boost::thread(boost::bind(&SafetyController::controlLoop, this));
 
@@ -82,26 +84,37 @@ void SafetyController::laserCB(
     const sensor_msgs::LaserScanConstPtr& laser_msg) {
   boost::mutex::scoped_lock lock(laser_mutex_);
   laser_msg_ = *laser_msg;
+  num_beams_half_ = laser_msg_.ranges.size()/2;
 }
 
 void SafetyController::controlLoop() {
   ros::Rate r(controller_frequency_);
   while (ros::ok()) {
-    float max_allowed_vel = max_vel_;
-    float range = 0.0;
+    cur_max_allowed_vel_ = max_vel_;
+    cur_range_ = 0.0;
     for (int i = 0; i < laser_msg_.ranges.size(); i++) {
-      range = laser_msg_.ranges[i];
-      if (range <= med_dist_) {
-        max_allowed_vel = med_vel_;
+      is_left_sided_beam_ = i < num_beams_half_;
+      cur_range_ = laser_msg_.ranges[i];
+      if (cur_range_ <= med_dist_) {
+        cur_max_allowed_vel_ = med_vel_;
       }
-      if (range <= low_dist_) {
-        max_allowed_vel = low_vel_;
-        // cancel iteration because we already found one beam to be the closest
-        break;
+      if (cur_range_ <= low_dist_) {
+        // If we see a laser beam on the right side of the robot
+        // we want keep our velocity as the beams on the right belong to another
+        // robot and we want to pass the other robot with a higher velocity to
+        // overcome oscillations.
+        if (prioritize_right_side_ == true && is_left_sided_beam_ == false) {
+          continue;
+        }
+        else {
+          cur_max_allowed_vel_ = low_vel_;
+          // cancel iteration because we already found one beam to be the closest
+          break;
+        }
       }
     }
 
-    set_local_planner_max_lin_vel(max_allowed_vel);
+    set_local_planner_max_lin_vel(cur_max_allowed_vel_);
     r.sleep();
   }
 }

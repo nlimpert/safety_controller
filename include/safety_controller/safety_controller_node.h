@@ -82,6 +82,12 @@ class SafetyController {
 
   double min_vel_, max_vel_, med_vel_, low_vel_, max_vel_theta_;
   double med_dist_, low_dist_;
+  bool prioritize_right_side_;
+  float cur_max_allowed_vel_;
+  float cur_range_;
+  bool is_left_sided_beam_;
+  int num_beams_half_;
+
 };
 };  // namespace safety_controller
 #endif
